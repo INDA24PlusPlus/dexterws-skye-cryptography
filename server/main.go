@@ -25,6 +25,10 @@ type FileDownload struct {
     File         []byte
 }
 
+// Om fil ej finns skicka 0
+// Om fil finns skicka 1
+// Skicka storlek på filen
+// Skicka filen
 func handleDownload(conn net.Conn) {
     filename, err := bufio.NewReader(conn).ReadString('\n')
     if err != nil {
@@ -54,15 +58,37 @@ func handleDownload(conn net.Conn) {
     io.Copy(conn, file)
 }
 
+func handleUpload(conn net.Conn) {
+    // Read 8 bit id
+    id, err := bufio.NewReader(conn).ReadByte()
+    if err != nil {
+        log.Fatal(err)
+    }
+    // Make file
+    file, err := os.Create(fmt.Sprintf("fs/%d", id))
+    if err != nil {
+        log.Fatal(err)
+    }
+    io.Copy(file, conn)
+}
+
 
 func handleConnection(conn net.Conn) {
     defer conn.Close()
     for {
-        handleDownload(conn)
+        // Read 1 byte to determine if client wants to upload or download
+        _, err := bufio.NewReader(conn).ReadByte()
+        if err != nil {
+            log.Fatal(err)
+        }
+        handleUpload(conn)
     }
 }
 
 func main() {
+    if _, err := os.Stat("fs"); os.IsNotExist(err) {
+        os.Mkdir("fs", 0755)
+    }
     ln, err := net.Listen("tcp", ":8000")
     if err != nil {
         log.Fatal(err)
