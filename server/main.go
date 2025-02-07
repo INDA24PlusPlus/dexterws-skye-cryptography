@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"crypto/sha512"
 )
 
 // Upload
@@ -60,6 +61,29 @@ func handleDownload(conn net.Conn) {
 	conn.Write(b)
 	io.Copy(conn, file)
 }
+
+func handleHashValidationRequest(conn net.Conn) {
+	filename, err := bufio.NewReader(conn).ReadString('\n')
+	if err != nil {
+		log.Fatal(err)
+	}
+	filename = strings.TrimSpace(filename)
+
+	file, err := os.ReadFile(filename)
+	// If file not found, send byte 0 to client
+	// If file found, send byte 1 to client
+	if err != nil {
+		conn.Write([]byte{0})
+		return
+	}
+	conn.Write([]byte{1})
+	b := sha512.Sum512(file)
+	conn.Write(b[:])
+	
+	// Send Hash of file
+}
+
+
 
 func handleUpload(conn net.Conn) {
 	// Read 8 bit id

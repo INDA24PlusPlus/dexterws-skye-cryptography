@@ -7,7 +7,7 @@ type File struct {
 
 type Response struct {
 	File File
-	Hash u512
+	Hash b512
 	// Required proof nodes
 	// Root hash
 }
