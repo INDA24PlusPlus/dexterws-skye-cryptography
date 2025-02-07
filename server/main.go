@@ -121,6 +121,21 @@ func uploadHandler(w http.ResponseWriter, r *http.Request, m *utils.MerkleTree) 
     }
     file.Write(request.File.Data)
     file, err = os.Create(fmt.Sprintf("fs/%d.nonce", request.Id))
+    PrevChecksum:=m.ValidHash
+    m.SetLeaf(request.Id,sha512.Sum512(request.File.Data))
+    m.CalcHash()
+    xoredHash:=utils.Mb512bwxor(PrevChecksum,m.ValidHash)
+    pl:=utils.UpdateHashPayload{
+	    NewHash: xoredHash,
+	    Checksum: utils.Hash(PrevChecksum,m.ValidHash),
+    }
+    jsonResponse, err := json.Marshal(pl)
+    if err != nil {
+        log.Fatal(err)
+    }
+    w.Header().Set("Content-Type", "application/json")
+    w.Write(jsonResponse)
+
     if err != nil {
         log.Fatal(err)
     }
@@ -151,7 +166,7 @@ func downloadHandler(w http.ResponseWriter, r *http.Request, m *utils.MerkleTree
             Data:  fileData,
             Nonce: nonceData,
         },
-        Hash: m.ValidateHash(uint8(uint_id), sha512.Sum512(fileData)),
+        Hash: utils.Mb512bwxor(m.ValidateHash(uint8(uint_id), sha512.Sum512(fileData)), sha512.Sum512(fileData)),
     }
     jsonResponse, err := json.Marshal(response)
     if err != nil {

@@ -5,6 +5,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/sha512"
 	"dws-sk-fs/utils"
 	"encoding/json"
 	"errors"
@@ -13,7 +14,7 @@ import (
 	"os"
 )
 
-func uploadFile() error {
+func uploadFile(chsum *utils.ValidateHashResponse) error {
     var file string
     fmt.Print("Enter file path: ")
     fmt.Scanln(&file)
@@ -56,7 +57,21 @@ func uploadFile() error {
         fmt.Println(err)
         return errors.New("Failed to reach server")
     }
-    http.Post("http://localhost:8080/upload", "application/json", bytes.NewBuffer(json_uploadRequest))
+    response,err:=http.Post("http://localhost:8080/upload", "application/json", bytes.NewBuffer(json_uploadRequest))
+    if err != nil {
+        fmt.Println(err)
+        return errors.New("Failed to reach server")
+    }
+
+    var uploadResponse utils.UpdateHashPayload
+    jsonUploadResponse := json.NewDecoder(response.Body)
+    jsonUploadResponse.Decode(&uploadResponse)
+    xoredHash:=utils.Mb512bwxor(chsum.Hash,uploadResponse.NewHash)
+    if(utils.Hash(xoredHash,chsum.Hash)!=uploadResponse.Checksum){
+	fmt.Println("Checksum error")
+        return errors.New("Invalid Checksum")
+    }
+    chsum.Hash=xoredHash
     return nil
 }
 
@@ -83,7 +98,7 @@ func encryptFile(data []byte, key []byte) (utils.File, error) {
     }, nil
 }
 
-func downloadFile() error {
+func downloadFile(chsum *utils.ValidateHashResponse) error {
     var id uint8
     fmt.Print("Enter file id: ")
     fmt.Scanln(&id)
@@ -99,6 +114,9 @@ func downloadFile() error {
     jsonDownloadResponse := json.NewDecoder(response.Body)
     jsonDownloadResponse.Decode(&downloadResponse)
     fmt.Println("File downloaded: " + string(downloadResponse.File.Data))
+    if(utils.Mb512bwxor(sha512.Sum512(downloadResponse.File.Data),chsum.Hash)!=chsum.Hash){
+        return errors.New("Invalid Checksum")
+    }
     decrypted_file, err := decryptFile(downloadResponse.File, key)
     if err != nil {
         return errors.New("Decryption failed")
@@ -133,15 +151,16 @@ func decryptFile(file utils.File, key []byte) ([]byte, error) {
 
 
 func commandLoop() {
+	hash:=&utils.ValidateHashResponse{}
     for {
         fmt.Print("Enter command: ")
         var command string
         fmt.Scanln(&command)
         switch command {
         case "upload":
-            uploadFile()
+            uploadFile(hash)
         case "download":
-            downloadFile()
+            downloadFile(hash)
         case "exit":
             return
         default:

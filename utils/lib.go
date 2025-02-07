@@ -55,7 +55,7 @@ func b512eq(a b512, b b512) (eq bool){
 	}
 	return
 }
-func b512bwxor(a b512, b b512) (c b512){
+func Mb512bwxor(a b512, b b512) (c b512){
 	for i:=0; i<64; i++ {
 		c[i]=a[i]^b[i]
 	}
