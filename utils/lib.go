@@ -1,9 +1,8 @@
 package utils
-/*
+
 import (
 	"encoding/binary"
 	"crypto/sha512"
-	"fmt"
 )
 type u512 [8]uint64
 type b512 [64]byte;
@@ -14,6 +13,7 @@ func add_b512(a b512, b b512) (c b512) {
 	return
 }
 func b512_to_bytes(b b512) (o []byte){
+	o=make([]byte, 64)
 	for i:=0; i<64; i++{
 		o[i]=b[i]
 	}
@@ -121,6 +121,4 @@ func (MT *MerkleTree) Instantiate(depth uint8) {
 	MT.Root.Instantiate(depth)
 }
 
-func main(){
-		fmt.Println("aaaaaaaaaaaaaaa")
-}*/
+
