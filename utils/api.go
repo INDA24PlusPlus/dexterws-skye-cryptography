@@ -2,7 +2,7 @@ package utils
 
 type File struct {
 	Data  []byte
-	Nonce uint64
+	Nonce [12]byte
 }
 
 type Response struct {
@@ -10,4 +10,9 @@ type Response struct {
 	Hash u512
 	// Required proof nodes
 	// Root hash
+}
+
+type UploadRequest struct {
+    File File
+    Id  uint8
 }

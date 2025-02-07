@@ -92,47 +92,59 @@ func handleConnection(conn net.Conn, m utils.MerkleTree) {
 }
 
 func uploadHandler(w http.ResponseWriter, r *http.Request, m utils.MerkleTree) {
-	// Read 8 bit id
-	id, err := bufio.NewReader(r.Body).ReadByte()
-	if err != nil {
-		log.Fatal(err)
-	}
-	// Make file
-	file, err := os.Create(fmt.Sprintf("fs/%d", id))
-	if err != nil {
-		log.Fatal(err)
-	}
-	io.Copy(file, r.Body)
+    request := utils.UploadRequest{}
+    jsonRequest := json.NewDecoder(r.Body)
+    jsonRequest.Decode(&request)
+    file, err := os.Create(fmt.Sprintf("fs/%d.dat", request.Id))
+    if err != nil {
+        log.Fatal(err)
+    }
+    file.Write(request.File.Data)
+    file, err = os.Create(fmt.Sprintf("fs/%d.nonce", request.Id))
+    if err != nil {
+        log.Fatal(err)
+    }
+    file.Write(request.File.Nonce[:])
 }
 
 func downloadHandler(w http.ResponseWriter, r *http.Request, m utils.MerkleTree) {
-	// Read 8 bit id
-	id, err := bufio.NewReader(r.Body).ReadByte()
-	if err != nil {
-		log.Fatal(err)
-	}
-	// Make file
-	file, err := os.Create(fmt.Sprintf("fs/%d", id))
-	if err != nil {
-		log.Fatal(err)
-	}
-	encrypted_file := utils.File{}
-	file.Read(encrypted_file.Data)
-	// Send file to client
-	response := utils.Response{
-		File: encrypted_file,
-		Hash: m.ValidHash,
-	}
-	// Send response to client
-	jsonResponse := json.NewEncoder(w)
-	jsonResponse.Encode(response)
+    id := r.URL.Query().Get("id")
+    file, err := os.Open(fmt.Sprintf("fs/%s.dat", id))
+    if err != nil {
+        log.Fatal(err)
+    }
+    fileInfo, err := file.Stat()
+    if err != nil {
+        log.Fatal(err)
+    }
+    fileData := make([]byte, fileInfo.Size())
+    file.Read(fileData)
+    nonce, err := os.Open(fmt.Sprintf("fs/%s.nonce", id))
+    if err != nil {
+        log.Fatal(err)
+    }
+    var nonceData [12]byte
+    nonce.Read(nonceData[:])
+    response := utils.Response{
+        File: utils.File{
+            Data:  fileData,
+            Nonce: nonceData,
+        },
+        Hash: m.ValidHash,
+    }
+    jsonResponse, err := json.Marshal(response)
+    if err != nil {
+        log.Fatal(err)
+    }
+    w.Header().Set("Content-Type", "application/json")
+    w.Write(jsonResponse)
 }
 
 func main() {
 	//m := utils.MerkleTree{}
-	//if _, err := os.Stat("fs"); os.IsNotExist(err) {
-	//	os.Mkdir("fs", 0755)
-	//}
+	if _, err := os.Stat("fs"); os.IsNotExist(err) {
+		os.Mkdir("fs", 0755)
+	}
 	//ln, err := net.Listen("tcp", ":8000")
 	//if err != nil {
 	//	log.Fatal(err)
