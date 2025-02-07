@@ -7,71 +7,73 @@ import (
 	"crypto/rand"
 	"dws-sk-fs/utils"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 )
 
-func uploadFile() {
+func uploadFile() error {
     var file string
     fmt.Print("Enter file path: ")
     fmt.Scanln(&file)
     f, err := os.Open(file)
     if err != nil {
         fmt.Println(err)
-        return
+        return errors.New("File not found")
     }
     defer f.Close()
     var password string
-    fmt.Print("Enter password: ")
+    fmt.Print("Enter encryption password: ")
     fmt.Scanln(&password)
     key := []byte(password)
     fileInfo, err := f.Stat()
     if err != nil {
         fmt.Println(err)
-        return
+        return errors.New("File not found")
     }
     data := make([]byte, fileInfo.Size())
     _, err = f.Read(data)
     if err != nil {
         fmt.Println(err)
-        return
+        return errors.New("File not found")
     }
     encrypted_file, err := encryptFile(data, key)
     if err != nil {
         fmt.Println(err)
-        return
+        return errors.New("Encryption failed")
     }
+    var id uint8
+    fmt.Print("Enter file id: ")
+    fmt.Scanln(&id)
     uploadRequest := utils.UploadRequest {
         File: encrypted_file,
-        Id: 0,
+        Id: id,
     }
     // Send uploadRequest to server
     json_uploadRequest, err := json.Marshal(uploadRequest)
     if err != nil {
         fmt.Println(err)
-        return
+        return errors.New("Failed to reach server")
     }
     http.Post("http://localhost:8080/upload", "application/json", bytes.NewBuffer(json_uploadRequest))
+    return nil
 }
 
 func encryptFile(data []byte, key []byte) (utils.File, error) {
     var nonce [12]byte
     _, err := rand.Read(nonce[:])
     if err != nil {
-        fmt.Println(err)
         return utils.File{}, err
     }
     key_aes := make([]byte, 32)
     copy(key_aes, key)
     aes, err := aes.NewCipher(key_aes)
     if err != nil {
-        fmt.Println(err)
         return utils.File{}, err
     }
     gcm, err := cipher.NewGCM(aes)
     if err != nil {
-        fmt.Println(err)
         return utils.File{}, err
     }
     ciphertext := gcm.Seal(nil, nonce[:], data, nil)
@@ -81,18 +83,17 @@ func encryptFile(data []byte, key []byte) (utils.File, error) {
     }, nil
 }
 
-func downloadFile() {
-    var id string
+func downloadFile() error {
+    var id uint8
     fmt.Print("Enter file id: ")
     fmt.Scanln(&id)
     var password string
     fmt.Print("Enter password: ")
     fmt.Scanln(&password)
     key := []byte(password)
-    response, err := http.Get("http://localhost:8080/download?id=" + id)
+    response, err := http.Get("http://localhost:8080/download?id=" + string(id))
     if err != nil {
-        fmt.Println(err)
-        return
+        return errors.New("Failed to reach server")
     }
     var downloadResponse utils.Response
     jsonDownloadResponse := json.NewDecoder(response.Body)
@@ -100,15 +101,15 @@ func downloadFile() {
     fmt.Println("File downloaded: " + string(downloadResponse.File.Data))
     decrypted_file, err := decryptFile(downloadResponse.File, key)
     if err != nil {
-        fmt.Println(err)
-        return
+        return errors.New("Decryption failed")
     }
     file, err := os.Create("downloaded.dat")
     if err != nil {
         fmt.Println(err)
-        return
+        return errors.New("Failed to create file")
     }
     file.Write(decrypted_file)
+    return nil
 }
 
 func decryptFile(file utils.File, key []byte) ([]byte, error) {
@@ -116,17 +117,14 @@ func decryptFile(file utils.File, key []byte) ([]byte, error) {
     copy(key_aes, key)
     aes, err := aes.NewCipher(key_aes)
     if err != nil {
-        fmt.Println(err)
         return nil, err
     }
     gcm, err := cipher.NewGCM(aes)
     if err != nil {
-        fmt.Println(err)
         return nil, err
     }
     data, err := gcm.Open(nil, file.Nonce[:], file.Data, nil)
     if err != nil {
-        fmt.Println(err)
         return nil, err
     }
     fmt.Println("Decrypted data: " + string(data))
@@ -134,16 +132,27 @@ func decryptFile(file utils.File, key []byte) ([]byte, error) {
 }
 
 
-func commandLoop() {
+func commandLoop(merkle utils.MerkleTree) {
     for {
         fmt.Print("Enter command: ")
         var command string
         fmt.Scanln(&command)
-        fmt.Println("Command: " + command)
+        switch command {
+        case "upload":
+            uploadFile()
+        case "download":
+            downloadFile()
+        case "exit":
+            return
+        default:
+            fmt.Println("Invalid command")
+            fmt.Println("Commands: upload, download, exit")
+        }
     }
 }
 
 func main() {
-    uploadFile()
-    downloadFile()
+    merkle := utils.MerkleTree{}
+    merkle.Instantiate(8)
+    commandLoop(merkle)
 }
