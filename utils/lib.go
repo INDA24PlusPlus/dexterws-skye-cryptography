@@ -83,6 +83,8 @@ func (MN *MerkleNode) SetLeaf(path uint8, depth uint8, check b512){
 		} else {
 			MN.Left.SetLeaf(path, depth+1, check)
 		}
+	} else {
+		MN.Data=check
 	}
 
 }
@@ -112,10 +114,15 @@ func (MT *MerkleTree) CalcHash() (hash b512) {
 	hash=MT.ValidHash
 	return
 }
-func (MT *MerkleTree) ValidateHash(path uint8, check b512) (valid bool) {
-	valid=b512eq(MT.Root.ValidateLeaf(path, 0, check),MT.ValidHash)
+func (MT *MerkleTree) ValidateHash(path uint8, check b512) (hash b512) {
+	hash=MT.Root.ValidateLeaf(path, 0, check)
 	return
 }
+func (MT *MerkleTree) SetLeaf(path uint8, check b512) {
+	MT.Root.SetLeaf(path, 0, check)
+	return
+}
+
 func (MT *MerkleTree) Instantiate(depth uint8) {
 	MT.Root=&MerkleNode{}
 	MT.Root.Instantiate(depth)

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"strconv"
 	"crypto/sha512"
 )
 
@@ -58,6 +59,7 @@ func handleDownload(conn net.Conn) {
 	// Send file size to client as 8 bytes
 	b := make([]byte, 8)
 	binary.LittleEndian.PutUint64(b, uint64(fileSize))
+
 	conn.Write(b)
 	io.Copy(conn, file)
 }
@@ -83,8 +85,6 @@ func handleHashValidationRequest(conn net.Conn) {
 	// Send Hash of file
 }
 
-
-
 func handleUpload(conn net.Conn) {
 	// Read 8 bit id
 	id, err := bufio.NewReader(conn).ReadByte()
@@ -99,11 +99,7 @@ func handleUpload(conn net.Conn) {
 	io.Copy(file, conn)
 }
 
-func writeMerkleTree(conn net.Conn, m utils.MerkleTree) {
-	// Send MerkleTree to client
-}
-
-func handleConnection(conn net.Conn, m utils.MerkleTree) {
+func handleConnection(conn net.Conn) {
 	defer conn.Close()
 	for {
 		// Read 1 byte to determine if client wants to upload or download
@@ -115,7 +111,7 @@ func handleConnection(conn net.Conn, m utils.MerkleTree) {
 	}
 }
 
-func uploadHandler(w http.ResponseWriter, r *http.Request, m utils.MerkleTree) {
+func uploadHandler(w http.ResponseWriter, r *http.Request, m *utils.MerkleTree) {
     request := utils.UploadRequest{}
     jsonRequest := json.NewDecoder(r.Body)
     jsonRequest.Decode(&request)
@@ -131,7 +127,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request, m utils.MerkleTree) {
     file.Write(request.File.Nonce[:])
 }
 
-func downloadHandler(w http.ResponseWriter, r *http.Request, m utils.MerkleTree) {
+func downloadHandler(w http.ResponseWriter, r *http.Request, m *utils.MerkleTree) {
     id := r.URL.Query().Get("id")
     file, err := os.Open(fmt.Sprintf("fs/%s.dat", id))
     if err != nil {
@@ -148,13 +144,14 @@ func downloadHandler(w http.ResponseWriter, r *http.Request, m utils.MerkleTree)
         log.Fatal(err)
     }
     var nonceData [12]byte
+    uint_id,_:= strconv.Atoi(id)
     nonce.Read(nonceData[:])
     response := utils.Response{
         File: utils.File{
             Data:  fileData,
             Nonce: nonceData,
         },
-        Hash: m.ValidHash,
+        Hash: m.ValidateHash(uint8(uint_id), sha512.Sum512(fileData)),
     }
     jsonResponse, err := json.Marshal(response)
     if err != nil {
@@ -164,6 +161,58 @@ func downloadHandler(w http.ResponseWriter, r *http.Request, m utils.MerkleTree)
     w.Write(jsonResponse)
 }
 
+func validationHandler(w http.ResponseWriter, r *http.Request, m *utils.MerkleTree) {	
+    request := utils.ValidateHashRequest{}
+    jsonRequest := json.NewDecoder(r.Body)
+    jsonRequest.Decode(&request)
+    file, err := os.Open(fmt.Sprintf("fs/%d.dat", request.Id))
+    if err != nil {
+        log.Fatal(err)
+    }
+    fileInfo, err := file.Stat()
+    if err != nil {
+        log.Fatal(err)
+    }
+    fileData := make([]byte, fileInfo.Size())
+    file.Read(fileData)
+    response := utils.ValidateHashResponse{
+        Hash: m.ValidateHash(request.Id, sha512.Sum512(fileData)),
+    }
+    jsonResponse, err := json.Marshal(response)
+    if err != nil {
+        log.Fatal(err)
+    }
+    w.Header().Set("Content-Type", "application/json")
+    w.Write(jsonResponse)
+}
+
+func addFilesToMerkleTree(m *utils.MerkleTree){
+    f, err := os.Open("fs")
+    if err != nil {
+        fmt.Println(err)
+        return
+    }
+    files, err := f.Readdir(0)
+    if err != nil {
+        fmt.Println(err)
+        return
+    }
+
+    for _, v := range files {
+	if strings.Split(v.Name(), ".")[1]=="dat" {
+		fileInfo, err := f.Stat()
+   		 if err != nil {
+        		log.Fatal(err)
+    		}
+   		fileData := make([]byte, fileInfo.Size())
+    		f.Read(fileData)
+		uint_id,_:= strconv.Atoi(strings.Split(v.Name(), ".")[0])
+		m.SetLeaf(uint8(uint_id),sha512.Sum512(fileData))
+	}
+        fmt.Println(strings.Split(v.Name(), ".")[1], v.IsDir())
+    }
+    m.CalcHash()
+}
 func main() {
 	//m := utils.MerkleTree{}
 	if _, err := os.Stat("fs"); os.IsNotExist(err) {
@@ -181,15 +230,21 @@ func main() {
 	//for {
 	//	handleConnection(conn, m)
 	//}
-	merkle := utils.MerkleTree{}
+	mt := &utils.MerkleTree{}
+	mt.Instantiate(8)
+	addFilesToMerkleTree(mt)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "Hello, World!")
 	})
 	http.HandleFunc("/upload", func(w http.ResponseWriter, r *http.Request) {
-		uploadHandler(w, r, merkle)
+		uploadHandler(w, r, mt)
 	})
 	http.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
-		downloadHandler(w, r, merkle)
+		downloadHandler(w, r, mt)
 	})
+	http.HandleFunc("/validate", func(w http.ResponseWriter, r *http.Request) {
+		validationHandler(w, r, mt)
+	})
+
 	http.ListenAndServe(":8080", nil)
 }

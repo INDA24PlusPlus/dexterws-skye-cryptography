@@ -16,3 +16,12 @@ type UploadRequest struct {
     File File
     Id  uint8
 }
+
+type ValidateHashRequest struct {
+    Id  uint8
+}
+
+type ValidateHashResponse struct {
+    Hash b512
+}
+
