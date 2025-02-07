@@ -21,6 +21,11 @@ type ValidateHashRequest struct {
     Id  uint8
 }
 
+type UpdateHashPayload struct {
+	NewHash  b512 //Xored with old Hash
+	Checksum b512 // Sha256(OldHash+NewHash)
+}
+
 type ValidateHashResponse struct {
     Hash b512
 }

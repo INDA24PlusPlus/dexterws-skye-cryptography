@@ -212,6 +212,7 @@ func addFilesToMerkleTree(m *utils.MerkleTree){
         fmt.Println(strings.Split(v.Name(), ".")[1], v.IsDir())
     }
     m.CalcHash()
+    m.Print()
 }
 func main() {
 	//m := utils.MerkleTree{}
@@ -245,6 +246,5 @@ func main() {
 	http.HandleFunc("/validate", func(w http.ResponseWriter, r *http.Request) {
 		validationHandler(w, r, mt)
 	})
-
 	http.ListenAndServe(":8080", nil)
 }

@@ -1,8 +1,10 @@
 package utils
 
 import (
-	"encoding/binary"
+	b64 "encoding/base64"
 	"crypto/sha512"
+	"encoding/binary"
+	"fmt"
 )
 type u512 [8]uint64
 type b512 [64]byte;
@@ -89,13 +91,15 @@ func (MN *MerkleNode) SetLeaf(path uint8, depth uint8, check b512){
 
 }
 
-func (MN *MerkleNode) Instantiate(depth uint8) {
-	
+func (MN *MerkleNode) Instantiate(depth uint8, path uint8) {
+	MN.Left=nil
+	MN.Right=nil
+	MN.Data=sha512.Sum512([]byte {byte(path)})
 	if(depth>0){
 		MN.Left=&MerkleNode{}
-		MN.Left.Instantiate(depth-1)
+		MN.Left.Instantiate(depth-1,path)
 		MN.Right=&MerkleNode{}
-		MN.Right.Instantiate(depth-1)
+		MN.Right.Instantiate(depth-1,path+0b1<<(8-depth))
 	}
 	return
 }
@@ -107,6 +111,14 @@ func (MN *MerkleNode) CalcHash() (hash b512){
 		return
 	}
 	hash=MN.Data
+	return
+}
+func (MN *MerkleNode) StrRep() (s string){
+	if(MN.Left!=nil){
+		s=fmt.Sprintf("(%s)|(%s)",MN.Left.StrRep(), MN.Right.StrRep())
+		return
+	}
+	s=fmt.Sprint(b64.URLEncoding.EncodeToString(MN.Data[:]))
 	return
 }
 func (MT *MerkleTree) CalcHash() (hash b512) {
@@ -122,10 +134,12 @@ func (MT *MerkleTree) SetLeaf(path uint8, check b512) {
 	MT.Root.SetLeaf(path, 0, check)
 	return
 }
-
+func (MT *MerkleTree) Print() {
+	fmt.Printf("%s|(%s)\n",b64.URLEncoding.EncodeToString(MT.ValidHash[:]),MT.Root.StrRep())
+}
 func (MT *MerkleTree) Instantiate(depth uint8) {
 	MT.Root=&MerkleNode{}
-	MT.Root.Instantiate(depth)
+	MT.Root.Instantiate(depth,0b0)
 }
 
 

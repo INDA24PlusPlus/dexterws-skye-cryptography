@@ -132,7 +132,7 @@ func decryptFile(file utils.File, key []byte) ([]byte, error) {
 }
 
 
-func commandLoop(merkle utils.MerkleTree) {
+func commandLoop() {
     for {
         fmt.Print("Enter command: ")
         var command string
@@ -154,5 +154,5 @@ func commandLoop(merkle utils.MerkleTree) {
 func main() {
     merkle := utils.MerkleTree{}
     merkle.Instantiate(8)
-    commandLoop(merkle)
+    commandLoop()
 }
